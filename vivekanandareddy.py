@@ -1,13 +1,16 @@
-
+# import required libraries
 import sqlite3
 import random
 import os
 from datetime import datetime, timedelta
 
+# database file name
 DB_PATH = "vivekanandareddy_drone_delivery.db"
 
+# SQL schema to create all tables
 SCHEMA_SQL = """
 
+-- drop tables if they already exist so script can run again
 DROP TABLE IF EXISTS delivery_logs;
 DROP TABLE IF EXISTS delivery_packages;
 DROP TABLE IF EXISTS deliveries;
@@ -15,6 +18,7 @@ DROP TABLE IF EXISTS packages;
 DROP TABLE IF EXISTS drones;
 DROP TABLE IF EXISTS warehouses;
 
+-- warehouses table stores drone hub locations
 CREATE TABLE warehouses(
  warehouse_id TEXT PRIMARY KEY,
  warehouse_name TEXT,
@@ -25,6 +29,7 @@ CREATE TABLE warehouses(
  capacity_packages INTEGER
 );
 
+-- drones table stores drone information
 CREATE TABLE drones(
  drone_id TEXT PRIMARY KEY,
  model TEXT,
@@ -35,6 +40,7 @@ CREATE TABLE drones(
  status TEXT
 );
 
+-- packages table stores package information
 CREATE TABLE packages(
  package_id TEXT PRIMARY KEY,
  category TEXT,
@@ -45,6 +51,7 @@ CREATE TABLE packages(
  recipient_age_band TEXT
 );
 
+-- deliveries table stores each delivery made by drones
 CREATE TABLE deliveries(
  delivery_id TEXT PRIMARY KEY,
  warehouse_id TEXT,
@@ -56,6 +63,7 @@ CREATE TABLE deliveries(
  status TEXT
 );
 
+-- junction table to connect deliveries and packages
 CREATE TABLE delivery_packages(
  delivery_id TEXT,
  package_id TEXT,
@@ -63,6 +71,7 @@ CREATE TABLE delivery_packages(
  PRIMARY KEY(delivery_id,package_id)
 );
 
+-- main table that stores drone flight log data
 CREATE TABLE delivery_logs(
  delivery_id TEXT,
  log_time_utc TEXT,
@@ -78,6 +87,7 @@ CREATE TABLE delivery_logs(
 
 """
 
+# function to generate a random timestamp between two dates
 def random_time(start,end):
     diff=end-start
     seconds=random.randint(0,int(diff.total_seconds()))
@@ -85,13 +95,18 @@ def random_time(start,end):
 
 def main():
 
+    # delete database if it already exists
     if os.path.exists(DB_PATH):
         os.remove(DB_PATH)
 
+    # connect to sqlite database
     conn=sqlite3.connect(DB_PATH)
     cur=conn.cursor()
+
+    # create tables
     cur.executescript(SCHEMA_SQL)
 
+    # warehouse locations data
     cities=[
         ("London","South East",51.5,-0.1),
         ("Manchester","North West",53.4,-2.2),
@@ -100,13 +115,18 @@ def main():
         ("Bristol","South West",51.4,-2.6)
     ]
 
+    # insert warehouse records
     warehouses=[]
     for i,c in enumerate(cities):
         wid=f"W{i+1:03d}"
         warehouses.append((wid,c[0]+" Hub",c[0],c[1],c[2],c[3],random.randint(5000,20000)))
+
     cur.executemany("INSERT INTO warehouses VALUES (?,?,?,?,?,?,?)",warehouses)
 
+    # drone types available
     drone_types=["Quadcopter","FixedWing","VTOL"]
+
+    # create random drone records
     drones=[]
     for i in range(30):
         drones.append((
@@ -118,12 +138,19 @@ def main():
             random.randint(10,40),
             random.choice(["Active","Maintenance"])
         ))
+
     cur.executemany("INSERT INTO drones VALUES (?,?,?,?,?,?,?)",drones)
 
+    # package categories
     categories=["Grocery","Pharmacy","Electronics","Documents"]
+
+    # generate package records
     packages=[]
     for i in range(800):
+
+        # sometimes age band is missing (to simulate missing data)
         age=None if random.random()<0.2 else random.choice(["18-24","25-34","35-44","45-54"])
+
         packages.append((
             f"PKG{i+1:05d}",
             random.choice(categories),
@@ -133,11 +160,14 @@ def main():
             "AB"+str(random.randint(10,99)),
             age
         ))
+
     cur.executemany("INSERT INTO packages VALUES (?,?,?,?,?,?,?)",packages)
 
+    # define delivery time range
     start=datetime(2025,1,1)
     end=datetime(2026,1,1)
 
+    # create delivery records
     deliveries=[]
     for i in range(400):
         deliveries.append((
@@ -150,24 +180,31 @@ def main():
             round(random.uniform(5,40),2),
             random.choice(["Delivered","Failed","Cancelled"])
         ))
+
     cur.executemany("INSERT INTO deliveries VALUES (?,?,?,?,?,?,?,?)",deliveries)
 
+    # link packages to deliveries
     dp=[]
     for d in deliveries:
         for p in random.sample(packages,random.randint(1,3)):
             dp.append((d[0],p[0],1))
+
     cur.executemany("INSERT INTO delivery_packages VALUES (?,?,?)",dp)
 
+    # delivery log events
     logs=[]
     events=["Takeoff","EnRoute","Dropoff","Return"]
 
+    # create main table with 1800 log records
     for i in range(1800):
+
         d=random.choice(deliveries)[0]
         t=random_time(start,end).isoformat()
 
         lat=51+random.random()
         lon=-0.1+random.random()
 
+        # sometimes gps location is missing
         if random.random()<0.03:
             lat=None
             lon=None
@@ -183,10 +220,10 @@ def main():
 
     cur.executemany("INSERT INTO delivery_logs VALUES (?,?,?,?,?,?,?,?,?)",logs)
 
+    # save database
     conn.commit()
     conn.close()
 
     print("Database created:",DB_PATH)
-
 if __name__=="__main__":
     main()
